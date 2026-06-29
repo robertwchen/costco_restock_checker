@@ -1,0 +1,23 @@
+[project]
+name = "costco-restock-checker"
+version = "0.1.0"
+description = "Best-effort restock monitor for Costco product pages with email and SMS alerts."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Robert Chen" }]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+markers = [
+    "browser: tests that launch a real Playwright browser (excluded from CI)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
