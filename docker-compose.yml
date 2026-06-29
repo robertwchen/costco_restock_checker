@@ -1,0 +1,16 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Keep the SQLite database on the mounted volume so it survives restarts.
+      DATABASE_URL: sqlite:////app/data/costco_restock.db
+    volumes:
+      - costco-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  costco-data:
