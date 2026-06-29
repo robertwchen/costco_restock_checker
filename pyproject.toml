@@ -9,6 +9,7 @@ authors = [{ name = "Robert Chen" }]
 
 [tool.pytest.ini_options]
 addopts = "-q"
+pythonpath = ["."]
 testpaths = ["tests"]
 markers = [
     "browser: tests that launch a real Playwright browser (excluded from CI)",
