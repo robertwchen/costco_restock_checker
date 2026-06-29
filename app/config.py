@@ -1,0 +1,66 @@
+"""Application configuration.
+
+Settings are read from environment variables (and an optional ``.env`` file)
+using pydantic-settings. Field names map to upper-case environment variables,
+for example ``delivery_zip`` reads ``DELIVERY_ZIP``.
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    app_name: str = "Costco Restock Checker"
+
+    # Checking behaviour
+    delivery_zip: str = "98101"
+    check_interval_minutes: int = 30
+    headless: bool = True
+    request_timeout_seconds: int = 45
+
+    # Storage
+    database_url: str = "sqlite:///./costco_restock.db"
+
+    # Scheduler
+    enable_scheduler: bool = True
+
+    # Email alerts (Resend)
+    resend_api_key: str | None = None
+    alert_email_from: str | None = None
+    alert_email_to: str | None = None
+
+    # SMS alerts (Twilio)
+    twilio_account_sid: str | None = None
+    twilio_auth_token: str | None = None
+    twilio_from_number: str | None = None
+    alert_sms_to: str | None = None
+
+    @property
+    def email_enabled(self) -> bool:
+        """True when every value needed to send email is present."""
+        return bool(self.resend_api_key and self.alert_email_from and self.alert_email_to)
+
+    @property
+    def sms_enabled(self) -> bool:
+        """True when every value needed to send SMS is present."""
+        return bool(
+            self.twilio_account_sid
+            and self.twilio_auth_token
+            and self.twilio_from_number
+            and self.alert_sms_to
+        )
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """Return a cached Settings instance."""
+    return Settings()
