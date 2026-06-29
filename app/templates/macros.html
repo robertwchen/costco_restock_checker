@@ -1,0 +1,11 @@
+{% macro status_badge(check) -%}
+  {%- if check is none -%}
+    <span class="badge badge-unknown">Not checked</span>
+  {%- elif check.status == "in_stock" -%}
+    <span class="badge badge-in">In stock</span>
+  {%- elif check.status == "out_of_stock" -%}
+    <span class="badge badge-out">Out of stock</span>
+  {%- else -%}
+    <span class="badge badge-unknown">Blocked or unknown</span>
+  {%- endif -%}
+{%- endmacro %}

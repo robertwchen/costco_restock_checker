@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="/">{{ app_name }}</a>
+      <span class="brand-sub">Restock monitor</span>
+    </div>
+  </header>
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Availability is detected on a best-effort basis and is not guaranteed
+        to be accurate. Pages that block automated access are reported as
+        blocked or unknown.
+      </p>
+    </div>
+  </footer>
+</body>
+</html>

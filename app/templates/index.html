@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% from "macros.html" import status_badge %}
+
+{% block content %}
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h1>Tracked products</h1>
+      <p class="muted">
+        Active products are checked every {{ interval }} minutes.
+        Default delivery ZIP {{ default_zip }}.
+      </p>
+    </div>
+    {% if products %}
+    <form method="post" action="/check-all">
+      <button class="btn" type="submit">Check all now</button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if products %}
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Product</th>
+        <th>Item</th>
+        <th>Variant</th>
+        <th>Status</th>
+        <th>Last checked</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for product in products %}
+      <tr>
+        <td>
+          <a class="link" href="/products/{{ product.id }}">{{ product.name }}</a>
+          {% if not product.active %}<span class="tag">paused</span>{% endif %}
+        </td>
+        <td class="muted">{{ product.item_number or "—" }}</td>
+        <td class="muted">{{ product.variant_label or "—" }}</td>
+        <td>{{ status_badge(product.latest_check) }}</td>
+        <td class="muted">
+          {% if product.latest_check %}{{ product.latest_check.checked_at | datetimeformat }}{% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No products are tracked yet. Add one below.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Add a product</h2>
+  <form class="form" method="post" action="/products">
+    <div class="field">
+      <label for="name">Name</label>
+      <input id="name" name="name" type="text" required placeholder="Product name" />
+    </div>
+    <div class="field">
+      <label for="url">Product URL</label>
+      <input id="url" name="url" type="url" required placeholder="https://www.costco.com/p/..." />
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label for="item_number">Item number</label>
+        <input id="item_number" name="item_number" type="text" placeholder="Optional" />
+      </div>
+      <div class="field">
+        <label for="zip_code">Delivery ZIP</label>
+        <input id="zip_code" name="zip_code" type="text" placeholder="Defaults to {{ default_zip }}" />
+      </div>
+    </div>
+    <div class="field">
+      <label for="variant">Variant</label>
+      <input id="variant" name="variant" type="text" placeholder="Bed Size=Full, Firmness=Firm" />
+      <p class="help">Optional. Comma-separated <code>key=value</code> pairs.</p>
+    </div>
+    <div class="actions">
+      <button class="btn" type="submit">Add product</button>
+    </div>
+  </form>
+</section>
+{% endblock %}
