@@ -171,3 +171,33 @@ def test_run_check_gives_up_after_max_attempts(monkeypatch):
     outcome = run_check("https://www.costco.com/p/x/1", settings=settings)
     assert outcome.availability is Availability.BLOCKED_OR_UNKNOWN
     assert attempts["n"] == 2
+
+
+def test_interpret_inventory_in_stock():
+    outcome = checker.interpret_inventory(
+        {"availableForSale": True, "availability": "INSTOCK"}, zip_code="20120"
+    )
+    assert outcome.availability is Availability.IN_STOCK
+    assert "20120" in outcome.detail
+
+
+def test_interpret_inventory_out_of_stock():
+    # The real shape returned by Costco for an out-of-stock item.
+    outcome = checker.interpret_inventory(
+        {"availableForSale": False, "availability": "NOSTOCK", "fulfilledBy": "OutOfStock"},
+        zip_code="22201",
+    )
+    assert outcome.availability is Availability.OUT_OF_STOCK
+    assert "NOSTOCK" in outcome.detail
+
+
+def test_interpret_inventory_unclear():
+    outcome = checker.interpret_inventory({"foo": "bar"}, zip_code="20120")
+    assert outcome.availability is Availability.BLOCKED_OR_UNKNOWN
+
+
+def test_inventory_record_extraction():
+    assert checker._inventory_record([{"a": 1}]) == {"a": 1}
+    assert checker._inventory_record({"a": 2}) == {"a": 2}
+    assert checker._inventory_record([]) is None
+    assert checker._inventory_record("x") is None

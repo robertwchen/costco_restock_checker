@@ -323,29 +323,79 @@ def _is_disallowed(url: str) -> bool:
     return any(fragment in host for fragment in DISALLOWED_HOST_FRAGMENTS)
 
 
-async def _set_delivery_zip(page, zip_code: str) -> None:
-    """Best-effort attempt to set the delivery ZIP.
+INVENTORY_API = (
+    "https://ecom-api.costco.com/ebusiness/inventory/v1/inventorylevels/availability/v2"
+)
+_INVENTORY_PATH = "inventorylevels/availability"
 
-    Selectors are intentionally broad and may need updating as the site
-    changes. Any failure is logged and ignored so the check can continue.
+
+def _inventory_headers(client_id: str) -> dict[str, str]:
+    return {
+        "Accept": "application/json",
+        "Referer": "https://www.costco.com/",
+        "client-identifier": client_id,
+        "costco.env": "ECOM",
+        "costco.service": "restInventory",
+    }
+
+
+def _inventory_record(data: object) -> dict | None:
+    if isinstance(data, list):
+        return data[0] if data and isinstance(data[0], dict) else None
+    if isinstance(data, dict):
+        return data
+    return None
+
+
+def interpret_inventory(record: dict, *, zip_code: str) -> CheckOutcome:
+    """Map a Costco inventory record to an availability outcome.
+
+    ``availableForSale`` is authoritative and ZIP-specific, unlike the page's
+    schema.org data which can mark every variant in stock.
     """
+    available = record.get("availableForSale")
+    state = str(record.get("availability") or "").strip()
+    if available is True:
+        return CheckOutcome(
+            Availability.IN_STOCK, f"Inventory API: available for delivery to {zip_code}"
+        )
+    if available is False:
+        return CheckOutcome(
+            Availability.OUT_OF_STOCK,
+            f"Inventory API: {state or 'not available'} for {zip_code}",
+        )
+    return CheckOutcome(
+        Availability.BLOCKED_OR_UNKNOWN, "Inventory API: no clear availability"
+    )
+
+
+async def _query_inventory(
+    page, item_number: str, zip_code: str, client_id: str
+) -> CheckOutcome | None:
+    """Query Costco's inventory API for a specific item and ZIP."""
+    url = (
+        f"{INVENTORY_API}/{item_number}"
+        f"?destinationPostalCode={zip_code}&destinationCountryCode=US"
+    )
     try:
-        trigger = page.locator(
-            "[data-testid*='zip' i], [aria-label*='delivery zip' i], #shipping-zipcode"
-        ).first
-        if await trigger.count() == 0:
-            return
-        await trigger.click(timeout=4000)
-        zip_input = page.locator(
-            "input[name*='zip' i], input[id*='zip' i], input[aria-label*='zip' i]"
-        ).first
-        if await zip_input.count() == 0:
-            return
-        await zip_input.fill(zip_code, timeout=4000)
-        await zip_input.press("Enter")
-        await page.wait_for_timeout(1500)
+        response = await page.request.get(
+            url, headers=_inventory_headers(client_id), timeout=15000
+        )
     except Exception:
-        logger.debug("Could not set delivery ZIP; continuing", exc_info=True)
+        logger.exception("Inventory API request error for item %s", item_number)
+        return None
+    if not response.ok:
+        logger.info("Inventory API HTTP %s for item %s", response.status, item_number)
+        return None
+    try:
+        data = await response.json()
+    except Exception:
+        logger.exception("Inventory API non-JSON response for item %s", item_number)
+        return None
+    record = _inventory_record(data)
+    if record is None:
+        return CheckOutcome(Availability.BLOCKED_OR_UNKNOWN, "Inventory API: empty response")
+    return interpret_inventory(record, zip_code=zip_code)
 
 
 async def _await_hydrated_jsonld(page, timeout_ms: int) -> None:
@@ -383,6 +433,14 @@ async def _check_async(
     from playwright.async_api import async_playwright
 
     timeout_ms = settings.request_timeout_seconds * 1000
+    captured: dict[str, str] = {}
+
+    def _on_request(request) -> None:
+        if _INVENTORY_PATH in request.url:
+            client_id = request.headers.get("client-identifier")
+            if client_id:
+                captured["client_id"] = client_id
+
     try:
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch(headless=settings.headless)
@@ -391,18 +449,42 @@ async def _check_async(
                     viewport={"width": 1280, "height": 900}
                 )
                 page = await context.new_page()
+                page.on("request", _on_request)
                 response = await page.goto(
                     url, wait_until="domcontentloaded", timeout=timeout_ms
                 )
                 status_code = response.status if response is not None else 0
+                title = await page.title()
 
-                if zip_code:
-                    await _set_delivery_zip(page, zip_code)
+                if status_code in (403, 429) or _first_match(title.lower(), BLOCK_SIGNALS):
+                    return CheckOutcome(
+                        Availability.BLOCKED_OR_UNKNOWN,
+                        f"Blocked while loading (HTTP {status_code})",
+                    )
 
+                # Authoritative path: Costco's inventory API, keyed by item and ZIP.
+                # The page must load first so it issues an inventory request we can
+                # read the guest client-identifier from.
+                if item_number:
+                    for _ in range(20):
+                        if captured.get("client_id"):
+                            break
+                        await page.wait_for_timeout(500)
+                    client_id = captured.get("client_id")
+                    if client_id:
+                        outcome = await _query_inventory(
+                            page, item_number, zip_code, client_id
+                        )
+                        if outcome is not None:
+                            return outcome
+                    return CheckOutcome(
+                        Availability.BLOCKED_OR_UNKNOWN, "Could not reach the inventory API"
+                    )
+
+                # Fallback for products without an item number: structured data.
                 await _await_hydrated_jsonld(page, min(timeout_ms, 12000))
                 await page.wait_for_timeout(800)
                 html = await page.content()
-                title = await page.title()
                 try:
                     jsonld_blocks = await page.eval_on_selector_all(
                         'script[type="application/ld+json"]',
@@ -414,7 +496,6 @@ async def _check_async(
                     html,
                     page_title=title,
                     status_code=status_code,
-                    item_number=item_number,
                     variant=variant,
                     jsonld_blocks=jsonld_blocks,
                 )

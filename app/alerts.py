@@ -53,8 +53,10 @@ def build_restock_message(
     lines.append(f"Detail: {outcome.detail}")
     lines.append(product.url)
 
-    # Keep SMS to ASCII (GSM-7) and ~one segment so each message costs one credit.
-    short_name = product.name if len(product.name) <= 38 else product.name[:35] + "..."
+    # Keep SMS to ASCII (GSM-7), apostrophe-free, and ~one segment: one credit per
+    # message, and it avoids gateway filters that flag apostrophes and links.
+    clean_name = product.name.replace("'", "")
+    short_name = clean_name if len(clean_name) <= 38 else clean_name[:35] + "..."
     if include_url:
         sms_text = f"In stock {zip_code}: {short_name} {product.url.split('?')[0]}"
     else:
