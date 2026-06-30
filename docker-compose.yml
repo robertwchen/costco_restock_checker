@@ -8,6 +8,8 @@ services:
     environment:
       # Keep the SQLite database on the mounted volume so it survives restarts.
       DATABASE_URL: sqlite:////app/data/costco_restock.db
+      # Costco blocks headless browsers; the image runs headed under Xvfb.
+      HEADLESS: "false"
     volumes:
       - costco-data:/app/data
     restart: unless-stopped

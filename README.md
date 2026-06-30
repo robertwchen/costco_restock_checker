@@ -127,9 +127,18 @@ cp .env.example .env
 docker compose up --build
 ```
 
-The image installs Chromium and its system dependencies, and the SQLite
-database is persisted on a named volume. The app is served on
+The image installs Chromium and its system dependencies plus Xvfb, and runs the
+browser headed under a virtual display (Costco blocks headless). The SQLite
+database is persisted on a named volume, and the app is served on
 http://localhost:8000.
+
+## Deployment
+
+Alerts only fire while the app is running, so it needs a host that stays on. See
+[DEPLOYMENT.md](DEPLOYMENT.md) for running on a home computer (recommended),
+Docker on a server, or a cloud VM. Note that Costco's bot mitigation is more
+aggressive toward data-center IPs, so a residential connection is the most
+reliable place to run it.
 
 ## Testing
 
