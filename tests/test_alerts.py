@@ -69,6 +69,40 @@ def test_dispatch_records_logs_for_each_channel(session, monkeypatch):
     assert calls == ["email", "sms"]
 
 
+def test_send_sms_delivers_to_every_recipient(monkeypatch):
+    sent: list[str] = []
+
+    class _Messages:
+        def create(self, *, body, from_, to):
+            sent.append(to)
+
+    class _Client:
+        messages = _Messages()
+
+    monkeypatch.setattr(alerts, "_twilio_client", lambda settings: _Client())
+    settings = Settings(
+        _env_file=None,
+        twilio_account_sid="AC123",
+        twilio_auth_token="token",
+        twilio_from_number="+15550000000",
+        alert_sms_to="+15550001111,+15550002222",
+    )
+    assert alerts.send_sms(settings, AlertMessage("subject", "body")) is True
+    assert sent == ["+15550001111", "+15550002222"]
+
+
+def test_twilio_client_prefers_api_key():
+    settings = Settings(
+        _env_file=None,
+        twilio_account_sid="AC123",
+        twilio_api_key_sid="SK123",
+        twilio_api_key_secret="secret",
+    )
+    client = alerts._twilio_client(settings)
+    assert client.username == "SK123"
+    assert client.account_sid == "AC123"
+
+
 def test_dispatch_without_channels_records_nothing(session):
     product = Product(name="X", url="https://u", variant={})
     session.add(product)

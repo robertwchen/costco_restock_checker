@@ -64,23 +64,39 @@ def send_email(settings: Settings, message: AlertMessage) -> bool:
         return False
 
 
+def _twilio_client(settings: Settings):
+    """Build a Twilio client, preferring API key authentication."""
+    from twilio.rest import Client
+
+    if settings.twilio_api_key_sid and settings.twilio_api_key_secret:
+        return Client(
+            settings.twilio_api_key_sid,
+            settings.twilio_api_key_secret,
+            settings.twilio_account_sid,
+        )
+    return Client(settings.twilio_account_sid, settings.twilio_auth_token)
+
+
 def send_sms(settings: Settings, message: AlertMessage) -> bool:
-    """Send an SMS through Twilio. Returns True on success."""
+    """Send an SMS through Twilio to every recipient. Returns True on success."""
     if not settings.sms_enabled:
         logger.debug("SMS alerts disabled; skipping")
         return False
     try:
-        from twilio.rest import Client
-
-        client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
-        client.messages.create(
-            body=f"{message.subject}\n{message.body}",
-            from_=settings.twilio_from_number,
-            to=settings.alert_sms_to,
-        )
-        return True
+        client = _twilio_client(settings)
+        body = f"{message.subject}\n{message.body}"
+        all_sent = True
+        for recipient in settings.sms_recipients:
+            try:
+                client.messages.create(
+                    body=body, from_=settings.twilio_from_number, to=recipient
+                )
+            except Exception:
+                logger.exception("Failed to send SMS to %s", recipient)
+                all_sent = False
+        return all_sent
     except Exception:
-        logger.exception("Failed to send SMS alert")
+        logger.exception("Failed to initialize Twilio client")
         return False
 
 

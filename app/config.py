@@ -41,7 +41,10 @@ class Settings(BaseSettings):
     # SMS alerts (Twilio)
     twilio_account_sid: str | None = None
     twilio_auth_token: str | None = None
+    twilio_api_key_sid: str | None = None
+    twilio_api_key_secret: str | None = None
     twilio_from_number: str | None = None
+    # One or more recipients, comma-separated.
     alert_sms_to: str | None = None
 
     @property
@@ -50,13 +53,26 @@ class Settings(BaseSettings):
         return bool(self.resend_api_key and self.alert_email_from and self.alert_email_to)
 
     @property
+    def sms_recipients(self) -> list[str]:
+        """Recipient numbers parsed from the comma-separated list."""
+        if not self.alert_sms_to:
+            return []
+        return [number.strip() for number in self.alert_sms_to.split(",") if number.strip()]
+
+    @property
+    def twilio_auth_ready(self) -> bool:
+        """True when either an API key pair or the auth token is available."""
+        has_api_key = bool(self.twilio_api_key_sid and self.twilio_api_key_secret)
+        return has_api_key or bool(self.twilio_auth_token)
+
+    @property
     def sms_enabled(self) -> bool:
         """True when every value needed to send SMS is present."""
         return bool(
             self.twilio_account_sid
-            and self.twilio_auth_token
             and self.twilio_from_number
-            and self.alert_sms_to
+            and self.sms_recipients
+            and self.twilio_auth_ready
         )
 
 

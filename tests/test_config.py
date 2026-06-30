@@ -32,3 +32,30 @@ def test_sms_enabled_requires_all_fields():
         alert_sms_to="+15551111111",
     )
     assert settings.sms_enabled is True
+
+
+def test_sms_recipients_parsed_from_csv():
+    settings = Settings(_env_file=None, alert_sms_to="+15550001111, +15550002222")
+    assert settings.sms_recipients == ["+15550001111", "+15550002222"]
+
+
+def test_sms_enabled_with_api_key_auth():
+    settings = Settings(
+        _env_file=None,
+        twilio_account_sid="AC123",
+        twilio_api_key_sid="SK123",
+        twilio_api_key_secret="secret",
+        twilio_from_number="+15550000000",
+        alert_sms_to="+15550001111,+15550002222",
+    )
+    assert settings.sms_enabled is True
+
+
+def test_sms_disabled_without_from_number():
+    settings = Settings(
+        _env_file=None,
+        twilio_account_sid="AC123",
+        twilio_auth_token="token",
+        alert_sms_to="+15550001111",
+    )
+    assert settings.sms_enabled is False
