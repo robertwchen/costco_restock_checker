@@ -59,3 +59,14 @@ def test_sms_disabled_without_from_number():
         alert_sms_to="+15550001111",
     )
     assert settings.sms_enabled is False
+
+
+def test_textbelt_enabled_requires_key_and_recipients():
+    assert (
+        Settings(
+            _env_file=None, textbelt_api_key="key", alert_sms_to="+15550001111"
+        ).textbelt_enabled
+        is True
+    )
+    assert Settings(_env_file=None, textbelt_api_key="key").textbelt_enabled is False
+    assert Settings(_env_file=None, alert_sms_to="+15550001111").textbelt_enabled is False

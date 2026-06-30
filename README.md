@@ -92,13 +92,22 @@ All settings are read from the environment (or a `.env` file).
 | `RESEND_API_KEY` | empty | Resend API key (email). |
 | `ALERT_EMAIL_FROM` | empty | Verified sender address. |
 | `ALERT_EMAIL_TO` | empty | Recipient address. |
-| `TWILIO_ACCOUNT_SID` | empty | Twilio account SID (SMS). |
-| `TWILIO_AUTH_TOKEN` | empty | Twilio auth token. |
+| `TWILIO_ACCOUNT_SID` | empty | Twilio account SID (SMS via Twilio). |
+| `TWILIO_AUTH_TOKEN` | empty | Twilio auth token (or use the API key pair). |
+| `TWILIO_API_KEY_SID` | empty | Twilio API key SID (preferred auth). |
+| `TWILIO_API_KEY_SECRET` | empty | Twilio API key secret. |
 | `TWILIO_FROM_NUMBER` | empty | Twilio sender number. |
-| `ALERT_SMS_TO` | empty | Recipient phone number. |
+| `TEXTBELT_API_KEY` | empty | TextBelt key (SMS via TextBelt). |
+| `ALERT_SMS_TO` | empty | Recipient numbers, comma-separated E.164, shared by all SMS channels. |
 
-Email is enabled only when all three Resend values are set; SMS is enabled only
-when all four Twilio values are set. Otherwise the channel is skipped.
+Each channel activates only when its values are present, and is skipped
+otherwise:
+
+- Email (Resend) needs `RESEND_API_KEY`, `ALERT_EMAIL_FROM`, and `ALERT_EMAIL_TO`.
+- SMS via Twilio needs `TWILIO_ACCOUNT_SID`, a sender number, recipients, and
+  either `TWILIO_AUTH_TOKEN` or the API key pair.
+- SMS via TextBelt needs `TEXTBELT_API_KEY` and recipients. This is the simplest
+  low-cost option: pay-as-you-go with no phone number or A2P 10DLC registration.
 
 ## Running with Docker
 

@@ -7,7 +7,10 @@ the sender is skipped and reported as not sent. Every attempt is recorded as an
 
 from __future__ import annotations
 
+import json
 import logging
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
@@ -100,6 +103,39 @@ def send_sms(settings: Settings, message: AlertMessage) -> bool:
         return False
 
 
+TEXTBELT_URL = "https://textbelt.com/text"
+
+
+def _post_textbelt(payload: dict[str, str]) -> dict:
+    data = urllib.parse.urlencode(payload).encode()
+    request = urllib.request.Request(TEXTBELT_URL, data=data)
+    with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310
+        return json.load(response)
+
+
+def send_textbelt(settings: Settings, message: AlertMessage) -> bool:
+    """Send an SMS through TextBelt to every recipient. Returns True on success."""
+    if not settings.textbelt_enabled:
+        logger.debug("TextBelt alerts disabled; skipping")
+        return False
+    body = f"{message.subject}\n{message.body}"
+    all_sent = True
+    for recipient in settings.sms_recipients:
+        try:
+            result = _post_textbelt(
+                {"phone": recipient, "message": body, "key": settings.textbelt_api_key or ""}
+            )
+            if not result.get("success"):
+                logger.error(
+                    "TextBelt failed for %s: %s", recipient, result.get("error")
+                )
+                all_sent = False
+        except Exception:
+            logger.exception("TextBelt request failed for %s", recipient)
+            all_sent = False
+    return all_sent
+
+
 def dispatch_restock_alerts(
     session: Session,
     product: Product,
@@ -134,6 +170,18 @@ def dispatch_restock_alerts(
                 product_id=product.id,
                 channel="sms",
                 target=settings.alert_sms_to or "",
+                success=success,
+                message=message.subject,
+            )
+        )
+
+    if settings.textbelt_enabled:
+        success = send_textbelt(settings, message)
+        logs.append(
+            AlertLog(
+                product_id=product.id,
+                channel="textbelt",
+                target=", ".join(settings.sms_recipients),
                 success=success,
                 message=message.subject,
             )

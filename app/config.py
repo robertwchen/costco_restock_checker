@@ -44,8 +44,11 @@ class Settings(BaseSettings):
     twilio_api_key_sid: str | None = None
     twilio_api_key_secret: str | None = None
     twilio_from_number: str | None = None
-    # One or more recipients, comma-separated.
+    # One or more recipients, comma-separated. Shared by all SMS channels.
     alert_sms_to: str | None = None
+
+    # SMS alerts (TextBelt) - pay-as-you-go, no number or registration required.
+    textbelt_api_key: str | None = None
 
     @property
     def email_enabled(self) -> bool:
@@ -67,13 +70,18 @@ class Settings(BaseSettings):
 
     @property
     def sms_enabled(self) -> bool:
-        """True when every value needed to send SMS is present."""
+        """True when every value needed to send SMS through Twilio is present."""
         return bool(
             self.twilio_account_sid
             and self.twilio_from_number
             and self.sms_recipients
             and self.twilio_auth_ready
         )
+
+    @property
+    def textbelt_enabled(self) -> bool:
+        """True when an SMS can be sent through TextBelt."""
+        return bool(self.textbelt_api_key and self.sms_recipients)
 
 
 @lru_cache

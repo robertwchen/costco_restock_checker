@@ -103,6 +103,46 @@ def test_twilio_client_prefers_api_key():
     assert client.account_sid == "AC123"
 
 
+def test_send_textbelt_delivers_to_every_recipient(monkeypatch):
+    calls: list[str] = []
+    monkeypatch.setattr(
+        alerts,
+        "_post_textbelt",
+        lambda payload: calls.append(payload["phone"]) or {"success": True, "quotaRemaining": 9},
+    )
+    settings = Settings(
+        _env_file=None, textbelt_api_key="key", alert_sms_to="+15550001111,+15550002222"
+    )
+    assert alerts.send_textbelt(settings, AlertMessage("subject", "body")) is True
+    assert calls == ["+15550001111", "+15550002222"]
+
+
+def test_send_textbelt_reports_failure(monkeypatch):
+    monkeypatch.setattr(
+        alerts, "_post_textbelt", lambda payload: {"success": False, "error": "out of quota"}
+    )
+    settings = Settings(_env_file=None, textbelt_api_key="key", alert_sms_to="+15550001111")
+    assert alerts.send_textbelt(settings, AlertMessage("subject", "body")) is False
+
+
+def test_send_textbelt_disabled_returns_false():
+    assert alerts.send_textbelt(Settings(_env_file=None), AlertMessage("s", "b")) is False
+
+
+def test_dispatch_uses_textbelt_when_enabled(session, monkeypatch):
+    monkeypatch.setattr(alerts, "send_textbelt", lambda settings, message: True)
+    settings = Settings(_env_file=None, textbelt_api_key="key", alert_sms_to="+15550001111")
+    product = Product(name="X", url="https://u", variant={})
+    session.add(product)
+    session.flush()
+
+    logs = dispatch_restock_alerts(
+        session, product, CheckOutcome(Availability.IN_STOCK, "ok"), settings=settings
+    )
+    assert [log.channel for log in logs] == ["textbelt"]
+    assert logs[0].success is True
+
+
 def test_dispatch_without_channels_records_nothing(session):
     product = Product(name="X", url="https://u", variant={})
     session.add(product)
