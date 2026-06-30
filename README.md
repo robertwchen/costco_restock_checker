@@ -27,14 +27,27 @@ from the dashboard.
 ## How it works
 
 1. The scheduler runs every `CHECK_INTERVAL_MINUTES` and checks each active product.
-2. For each product, Chromium loads the page, sets the delivery ZIP, and selects
-   the configured variant on a best-effort basis.
-3. The rendered HTML is classified into `in_stock`, `out_of_stock`, or
-   `blocked_or_unknown`. Blocks and challenges are reported, never circumvented.
-4. The result is stored. When an item transitions into stock, the configured
-   alert channels fire once.
+2. For each product, Chromium loads the page, sets the delivery ZIP on a
+   best-effort basis, and waits for the page to finish hydrating.
+3. Availability is read primarily from the page's schema.org `Product` JSON-LD,
+   matching the requested variant by SKU (item number) or by its attribute
+   values, and using that offer's `availability`. A text heuristic is used only
+   when no structured data is present.
+4. The result (`in_stock`, `out_of_stock`, or `blocked_or_unknown`) is stored.
+   When an item transitions into stock, the configured alert channels fire once.
 
-The classification function is pure and unit-tested; the browser driver wraps it.
+Blocks and bot challenges are reported as `blocked_or_unknown`, never
+circumvented. The classification function is pure and unit-tested; the browser
+driver wraps it.
+
+### A note on Costco specifically
+
+Costco serves Akamai bot mitigation. Headless browsers are blocked outright, so
+a real (headed) browser is required — set `HEADLESS=false`. Even then, automated
+requests are throttled and some checks will return `blocked_or_unknown`; the next
+scheduled run typically succeeds. Reads come from the variant-level JSON-LD,
+which Costco populates after client-side hydration, so the checker waits for that
+before classifying.
 
 ## Tech stack
 
@@ -134,8 +147,11 @@ tests/           pytest suite
   should not be relied on for purchasing decisions.
 - The checker does not solve CAPTCHAs, use proxies, or attempt to evade bot
   detection. When a page is blocked or challenged it is reported as
-  `blocked_or_unknown`.
+  `blocked_or_unknown`. For Costco this means headless mode is blocked (run with
+  `HEADLESS=false`) and some checks are throttled regardless.
 - Costco Same-Day and Instacart sources are out of scope.
+- SMS through a Twilio trial account is limited to predefined templates and
+  verified numbers, so a paid account is required to deliver custom alerts.
 - Use a conservative check interval and respect the target site's terms of use.
 
 ## License

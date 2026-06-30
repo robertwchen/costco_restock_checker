@@ -47,6 +47,7 @@ def run_check_for_product(
 
     outcome = run_check(
         product.url,
+        item_number=product.item_number,
         variant=product.variant or {},
         zip_code=zip_code,
         settings=settings,
