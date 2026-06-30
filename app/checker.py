@@ -30,6 +30,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass
 from enum import StrEnum
 from urllib.parse import urlparse
@@ -182,34 +183,41 @@ def _find_availability(
     item_number: str | None,
     variant: dict[str, str] | None,
 ) -> str | None:
-    """Find the availability string for the requested variant."""
-    candidates: list[dict] = []
+    """Find the availability string for the requested variant.
+
+    Per-variant entries (``hasVariant``) come from hydrated structured data and
+    are preferred over standalone product blocks, which on Costco can be a stale
+    server-rendered placeholder.
+    """
+    variant_candidates: list[dict] = []
+    standalone: list[dict] = []
     for product in products:
         variants = product.get("hasVariant")
         if isinstance(variants, list) and variants:
-            candidates.extend(v for v in variants if isinstance(v, dict))
+            variant_candidates.extend(v for v in variants if isinstance(v, dict))
         else:
-            candidates.append(product)
+            standalone.append(product)
 
-    if item_number:
-        for candidate in candidates:
-            if str(candidate.get("sku") or "") == str(item_number):
-                availability = _offer_availability(candidate.get("offers"))
-                if availability:
-                    return availability
+    wanted = [str(value).lower() for value in (variant or {}).values() if str(value).strip()]
 
-    if variant:
-        wanted = [str(value).lower() for value in variant.values() if str(value).strip()]
+    for pool in (variant_candidates, standalone):
+        if item_number:
+            for candidate in pool:
+                if str(candidate.get("sku") or "") == str(item_number):
+                    availability = _offer_availability(candidate.get("offers"))
+                    if availability:
+                        return availability
         if wanted:
-            for candidate in candidates:
+            for candidate in pool:
                 haystack = _candidate_haystack(candidate)
                 if all(value in haystack for value in wanted):
                     availability = _offer_availability(candidate.get("offers"))
                     if availability:
                         return availability
-
-    if not item_number and not variant and len(candidates) == 1:
-        return _offer_availability(candidates[0].get("offers"))
+        if not item_number and not wanted and len(pool) == 1:
+            availability = _offer_availability(pool[0].get("offers"))
+            if availability:
+                return availability
 
     return None
 
@@ -449,15 +457,29 @@ def run_check(
         )
 
     settings = settings or get_settings()
-    return asyncio.run(
-        _check_async(
-            url,
-            item_number=item_number,
-            variant=variant or {},
-            zip_code=zip_code or settings.delivery_zip,
-            settings=settings,
+    attempts = max(1, settings.checker_max_attempts)
+    outcome = CheckOutcome(Availability.BLOCKED_OR_UNKNOWN, "No attempt made")
+    for attempt in range(1, attempts + 1):
+        outcome = asyncio.run(
+            _check_async(
+                url,
+                item_number=item_number,
+                variant=variant or {},
+                zip_code=zip_code or settings.delivery_zip,
+                settings=settings,
+            )
         )
-    )
+        if outcome.availability is not Availability.BLOCKED_OR_UNKNOWN:
+            return outcome
+        if attempt < attempts:
+            logger.info(
+                "Attempt %d/%d returned blocked/unknown for %s; retrying",
+                attempt,
+                attempts,
+                url,
+            )
+            time.sleep(settings.checker_retry_delay_seconds)
+    return outcome
 
 
 def _main() -> None:

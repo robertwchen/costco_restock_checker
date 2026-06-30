@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     check_interval_minutes: int = 30
     headless: bool = True
     request_timeout_seconds: int = 45
+    # Retry a check that comes back blocked/unknown, to ride out transient blocks.
+    checker_max_attempts: int = 3
+    checker_retry_delay_seconds: int = 6
 
     # Storage
     database_url: str = "sqlite:///./costco_restock.db"
@@ -49,6 +52,9 @@ class Settings(BaseSettings):
 
     # SMS alerts (TextBelt) - pay-as-you-go, no number or registration required.
     textbelt_api_key: str | None = None
+    # Include the product URL in SMS. Off by default because some gateways
+    # (e.g. unverified TextBelt keys) block links. Enable once the key is verified.
+    sms_include_url: bool = False
 
     @property
     def email_enabled(self) -> bool:

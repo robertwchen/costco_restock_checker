@@ -65,3 +65,45 @@ def test_out_of_stock_does_not_alert(session, monkeypatch):
 
     run_check_for_product(session, product)
     assert sent == []
+
+
+def test_restock_alerts_through_a_blocked_gap(session, monkeypatch):
+    # out_of_stock -> blocked -> in_stock must still alert (last known is out_of_stock).
+    monkeypatch.setattr(
+        services, "run_check", lambda url, **kwargs: CheckOutcome(Availability.IN_STOCK, "mock")
+    )
+    sent: list[bool] = []
+    monkeypatch.setattr(
+        services, "dispatch_restock_alerts", lambda *args, **kwargs: sent.append(True)
+    )
+
+    product = Product(name="X", url="https://u", variant={})
+    session.add(product)
+    session.flush()
+    session.add(CheckResult(product_id=product.id, status="out_of_stock", detail=""))
+    session.add(CheckResult(product_id=product.id, status="blocked_or_unknown", detail=""))
+    session.flush()
+
+    run_check_for_product(session, product)
+    assert sent == [True]
+
+
+def test_no_realert_when_blocked_between_in_stock_checks(session, monkeypatch):
+    # in_stock -> blocked -> in_stock must not re-alert (last known is in_stock).
+    monkeypatch.setattr(
+        services, "run_check", lambda url, **kwargs: CheckOutcome(Availability.IN_STOCK, "mock")
+    )
+    sent: list[bool] = []
+    monkeypatch.setattr(
+        services, "dispatch_restock_alerts", lambda *args, **kwargs: sent.append(True)
+    )
+
+    product = Product(name="X", url="https://u", variant={})
+    session.add(product)
+    session.flush()
+    session.add(CheckResult(product_id=product.id, status="in_stock", detail=""))
+    session.add(CheckResult(product_id=product.id, status="blocked_or_unknown", detail=""))
+    session.flush()
+
+    run_check_for_product(session, product)
+    assert sent == []

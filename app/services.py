@@ -28,10 +28,19 @@ def is_restock(previous: str | None, current: str) -> bool:
     )
 
 
-def _latest_status(session: Session, product_id: int) -> str | None:
+def _latest_known_status(session: Session, product_id: int) -> str | None:
+    """Most recent status that was not blocked/unknown.
+
+    Ignoring blocked readings means a transient block between two checks does
+    not hide a real out-of-stock-to-in-stock transition, nor cause a duplicate
+    alert while the item simply stays in stock.
+    """
     return session.scalar(
         select(CheckResult.status)
-        .where(CheckResult.product_id == product_id)
+        .where(
+            CheckResult.product_id == product_id,
+            CheckResult.status != Availability.BLOCKED_OR_UNKNOWN.value,
+        )
         .order_by(CheckResult.checked_at.desc(), CheckResult.id.desc())
         .limit(1)
     )
@@ -43,7 +52,7 @@ def run_check_for_product(
     """Check one product, store the result, and alert on a restock."""
     settings = settings or get_settings()
     zip_code = product.zip_code or settings.delivery_zip
-    previous = _latest_status(session, product.id)
+    previous = _latest_known_status(session, product.id)
 
     outcome = run_check(
         product.url,

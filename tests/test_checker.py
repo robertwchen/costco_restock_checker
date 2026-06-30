@@ -1,4 +1,6 @@
-from app.checker import Availability, classify_html, run_check
+from app import checker
+from app.checker import Availability, CheckOutcome, classify_html, run_check
+from app.config import Settings
 
 
 def test_add_to_cart_is_in_stock():
@@ -139,3 +141,33 @@ def test_jsonld_graph_wrapper():
     )
     outcome = classify_html(html, item_number="88")
     assert outcome.availability is Availability.OUT_OF_STOCK
+
+
+def test_run_check_retries_then_succeeds(monkeypatch):
+    attempts = {"n": 0}
+
+    async def fake(url, **kwargs):
+        attempts["n"] += 1
+        if attempts["n"] < 2:
+            return CheckOutcome(Availability.BLOCKED_OR_UNKNOWN, "blocked")
+        return CheckOutcome(Availability.IN_STOCK, "ok")
+
+    monkeypatch.setattr(checker, "_check_async", fake)
+    settings = Settings(_env_file=None, checker_max_attempts=3, checker_retry_delay_seconds=0)
+    outcome = run_check("https://www.costco.com/p/x/1", settings=settings)
+    assert outcome.availability is Availability.IN_STOCK
+    assert attempts["n"] == 2
+
+
+def test_run_check_gives_up_after_max_attempts(monkeypatch):
+    attempts = {"n": 0}
+
+    async def always_blocked(url, **kwargs):
+        attempts["n"] += 1
+        return CheckOutcome(Availability.BLOCKED_OR_UNKNOWN, "blocked")
+
+    monkeypatch.setattr(checker, "_check_async", always_blocked)
+    settings = Settings(_env_file=None, checker_max_attempts=2, checker_retry_delay_seconds=0)
+    outcome = run_check("https://www.costco.com/p/x/1", settings=settings)
+    assert outcome.availability is Availability.BLOCKED_OR_UNKNOWN
+    assert attempts["n"] == 2

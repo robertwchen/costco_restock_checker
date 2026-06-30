@@ -26,12 +26,23 @@ logger = logging.getLogger(__name__)
 class AlertMessage:
     subject: str
     body: str
+    sms_text: str = ""
 
 
 def build_restock_message(
-    product: Product, outcome: CheckOutcome, *, zip_code: str
+    product: Product,
+    outcome: CheckOutcome,
+    *,
+    zip_code: str,
+    include_url: bool = False,
 ) -> AlertMessage:
-    """Compose the alert subject and body for a restocked product."""
+    """Compose the alert for a restocked product.
+
+    ``body`` is the long form used for email. ``sms_text`` is a compact,
+    single-segment form used for SMS to keep per-message cost down. The URL is
+    omitted from SMS unless ``include_url`` is set, since some gateways block
+    links from unverified senders.
+    """
     subject = f"Restock alert: {product.name}"
     lines = [f"{product.name} is now available."]
     if product.item_number:
@@ -41,7 +52,15 @@ def build_restock_message(
     lines.append(f"Delivery ZIP: {zip_code}")
     lines.append(f"Detail: {outcome.detail}")
     lines.append(product.url)
-    return AlertMessage(subject=subject, body="\n".join(lines))
+
+    # Keep SMS to ASCII (GSM-7) and ~one segment so each message costs one credit.
+    short_name = product.name if len(product.name) <= 38 else product.name[:35] + "..."
+    if include_url:
+        sms_text = f"In stock {zip_code}: {short_name} {product.url.split('?')[0]}"
+    else:
+        item = f" item {product.item_number}" if product.item_number else ""
+        sms_text = f"In stock {zip_code}: {short_name}{item}. Check Costco."
+    return AlertMessage(subject=subject, body="\n".join(lines), sms_text=sms_text)
 
 
 def send_email(settings: Settings, message: AlertMessage) -> bool:
@@ -87,7 +106,7 @@ def send_sms(settings: Settings, message: AlertMessage) -> bool:
         return False
     try:
         client = _twilio_client(settings)
-        body = f"{message.subject}\n{message.body}"
+        body = message.sms_text or f"{message.subject}\n{message.body}"
         all_sent = True
         for recipient in settings.sms_recipients:
             try:
@@ -118,7 +137,7 @@ def send_textbelt(settings: Settings, message: AlertMessage) -> bool:
     if not settings.textbelt_enabled:
         logger.debug("TextBelt alerts disabled; skipping")
         return False
-    body = f"{message.subject}\n{message.body}"
+    body = message.sms_text or f"{message.subject}\n{message.body}"
     all_sent = True
     for recipient in settings.sms_recipients:
         try:
@@ -147,7 +166,9 @@ def dispatch_restock_alerts(
     """Send alerts on enabled channels and record each attempt."""
     settings = settings or get_settings()
     zip_code = zip_code or product.zip_code or settings.delivery_zip
-    message = build_restock_message(product, outcome, zip_code=zip_code)
+    message = build_restock_message(
+        product, outcome, zip_code=zip_code, include_url=settings.sms_include_url
+    )
 
     logs: list[AlertLog] = []
 

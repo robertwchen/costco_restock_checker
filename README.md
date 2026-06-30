@@ -99,6 +99,9 @@ All settings are read from the environment (or a `.env` file).
 | `TWILIO_FROM_NUMBER` | empty | Twilio sender number. |
 | `TEXTBELT_API_KEY` | empty | TextBelt key (SMS via TextBelt). |
 | `ALERT_SMS_TO` | empty | Recipient numbers, comma-separated E.164, shared by all SMS channels. |
+| `SMS_INCLUDE_URL` | `false` | Include the product link in SMS (some gateways block links). |
+| `CHECKER_MAX_ATTEMPTS` | `3` | Attempts per check before reporting blocked/unknown. |
+| `CHECKER_RETRY_DELAY_SECONDS` | `6` | Delay between attempts. |
 
 Each channel activates only when its values are present, and is skipped
 otherwise:
@@ -108,6 +111,13 @@ otherwise:
   either `TWILIO_AUTH_TOKEN` or the API key pair.
 - SMS via TextBelt needs `TEXTBELT_API_KEY` and recipients. This is the simplest
   low-cost option: pay-as-you-go with no phone number or A2P 10DLC registration.
+  Links are omitted from SMS unless `SMS_INCLUDE_URL=true`, since unverified keys
+  cannot send URLs.
+
+A check that comes back blocked/unknown is retried up to `CHECKER_MAX_ATTEMPTS`
+times to ride out transient blocks, and restock detection ignores blocked
+readings so a momentary block neither hides a restock nor causes a duplicate
+alert.
 
 ## Running with Docker
 

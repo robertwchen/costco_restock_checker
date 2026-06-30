@@ -49,6 +49,29 @@ def test_build_restock_message_includes_details():
     assert "https://www.costco.com/p/x/1" in message.body
 
 
+def test_build_restock_message_has_compact_sms():
+    product = Product(
+        name="A" * 80,
+        url="https://www.costco.com/p/x/1?ADBUTLERID=zzz",
+        item_number="123",
+        variant={},
+    )
+    outcome = CheckOutcome(Availability.IN_STOCK, "ok")
+
+    # Default: no URL (works on gateways that block links), ASCII single segment.
+    message = build_restock_message(product, outcome, zip_code="20120")
+    assert message.sms_text.startswith("In stock 20120:")
+    assert "http" not in message.sms_text
+    assert "item 123" in message.sms_text
+    assert "..." in message.sms_text  # long name truncated
+    assert message.sms_text.isascii()
+
+    # Opt-in: include the product URL (query stripped).
+    with_url = build_restock_message(product, outcome, zip_code="20120", include_url=True)
+    assert "https://www.costco.com/p/x/1" in with_url.sms_text
+    assert "?ADBUTLERID" not in with_url.sms_text
+
+
 def test_dispatch_records_logs_for_each_channel(session, monkeypatch):
     calls: list[str] = []
     monkeypatch.setattr(alerts, "send_email", lambda settings, message: calls.append("email") or True)
