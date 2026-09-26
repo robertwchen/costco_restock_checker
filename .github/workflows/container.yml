@@ -1,0 +1,37 @@
+name: ARM64 worker container
+
+on:
+  push:
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'requirements.txt'
+      - 'app/**'
+      - 'compose.worker.yml'
+      - 'tests/container_smoke.py'
+      - '.github/workflows/container.yml'
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'requirements.txt'
+      - 'app/**'
+      - 'compose.worker.yml'
+      - 'tests/container_smoke.py'
+      - '.github/workflows/container.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  container:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Build native ARM64 worker
+        run: docker build --tag costco-worker:smoke .
+      - name: Check headed Chromium and worker entry point without network or secrets
+        run: docker run --rm -i --network none --entrypoint xvfb-run costco-worker:smoke -a python - < tests/container_smoke.py

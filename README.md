@@ -11,8 +11,10 @@ a FastAPI app, a Playwright-driven page checker, a SQLite store, a background
 scheduler, and a minimal dashboard. The default tracked product is a Novaform
 mattress (item 1847132, Full / Firm), and any other product URL can be added
 from the dashboard. The cloud monitor watches **Jumbo Baby Animal Plush,
-Design: Capybara (item 2005333)** every ten minutes. Its dashboard is optional
-and local; authoritative cloud checks appear in
+Design: Capybara (item 2005333)** on a configured ten-minute schedule. Observed
+Actions scheduling has been substantially slower; an
+[Oracle Always Free worker](docs/oracle.md) is prepared, pending account access
+and live verification. Its dashboard is optional and local; current cloud checks appear in
 [Actions](https://github.com/robertwchen/costco_restock_checker/actions/workflows/monitor.yml).
 
 ![Dashboard](docs/dashboard.png)

@@ -2,8 +2,11 @@
 
 See [observed deployment evidence](docs/verification.md). Two scheduled cloud
 checks succeeded, but their nearly three-hour spacing did not meet the requested
-ten-minute cadence. Actions remains enabled while a persistent-host decision is
-pending. `render.yaml` is a concrete inactive proposal: one Virginia worker,
+ten-minute cadence. **Oracle Always Free is now the selected replacement**;
+account sign-in and live deployment are pending. See the
+[Oracle setup and state-preserving handoff](docs/oracle.md). Actions remains the
+only enabled production monitor until replacement access is verified.
+`render.yaml` is an unused paid proposal: one Virginia worker,
 1 CPU, 2 GB RAM, 1 GB disk, approximately $25.25/month before provider messaging
 charges/tax. It must not be created without explicit paid-resource approval.
 
@@ -157,17 +160,22 @@ No new credits or paid resources are purchased automatically.
 
 | Approach | Cost assumption | Practical tradeoff |
 |---|---|---|
-| Actions (selected) | $0 standard public-repo runner charge; small artifacts subject to shared storage allowance | Headed browser works; best-effort cron and state recovery limits |
+| Oracle Always Free (selected, pending deployment) | Eligible A1: 1 OCPU, 4 GB RAM, 50 GB disk within shared account limits | Persistent SQLite; capacity and idle-reclamation limitations; access unverified |
+| Actions (current, migration pending) | $0 standard public-repo runner charge; small artifacts subject to shared storage allowance | Headed browser works; observed cadence inadequate |
 | Render worker | 1 CPU, 2 GB RAM + 1 GB disk: $25.25/month on Hobby | Managed restarts and persistent SQLite |
 | DigitalOcean VPS | Basic 1 vCPU, 2 GB RAM, 50 GB disk: $12/month before optional backups/tax | Persistent disk; OS/security maintenance |
 
 Sources: [GitHub billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions),
+[Oracle limits](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm),
 [schedule limitations](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule),
 [Render pricing](https://render.com/pricing),
 [Render plans](https://render.com/docs/compute-plans),
 [DigitalOcean](https://www.digitalocean.com/pricing/droplets).
 Changing providers cannot guarantee Costco access. No CAPTCHA bypass, proxy
 rotation, cart operations, or orders are used.
+GitHub's [additional terms](https://docs.github.com/en/site-policy/github-terms/github-terms-for-additional-products-and-features#actions)
+also caution against serverless-application use. Keep Actions for CI and software
+deployment after migration, not as the recommended permanent application host.
 
 ## Inactive persistent fallback
 
@@ -177,7 +185,7 @@ start-to-start interval without overlapping checks. A disk lock excludes another
 No dashboard port is published. Its new checkpoint table and Capybara seed do
 not delete the mattress or history; the watch's active flag is respected.
 
-Before switching: authorize the concrete paid resource, verify Costco there,
+Before switching: verify Always Free eligibility (or authorize a concrete paid resource), verify Costco there,
 disable Actions, migrate reconciled state and private configuration, and verify
 only one scheduler. Do not initialize to replace lost production state. For a
 genuinely new installation only:
@@ -191,3 +199,6 @@ Use protected `.env` and stable `MONITOR_STATE_KEY`; privately back up SQLite.
 Missing/corrupt checkpoints stop the worker. Health failures flag stale checks;
 Docker restarts exited processes, not unhealthy ones. Keep dashboard checks
 disabled for the cloud-owned watch to avoid a second notification path.
+The worker also supports `--verify` (no state/no sends), `--import-state`
+(validated JSON from stdin, no overwrite), and `--once --test` (isolated control
+event, persisted global test budget). See the Oracle handoff for ordered usage.

@@ -1,0 +1,34 @@
+#cloud-config
+# Ubuntu 24.04, Always Free A1. Contains no credentials and starts no monitor.
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - git
+write_files:
+  - path: /etc/ssh/sshd_config.d/00-stock-monitor.conf
+    permissions: '0644'
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+runcmd:
+  - - bash
+    - -ceu
+    - |
+      install -m 0755 -d /etc/apt/keyrings
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+      chmod a+r /etc/apt/keyrings/docker.asc
+      . /etc/os-release
+      test "$ID" = ubuntu
+      test "$VERSION_ID" = 24.04
+      printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu %s stable\n' \
+        "$(dpkg --print-architecture)" "$VERSION_CODENAME" > /etc/apt/sources.list.d/docker.list
+      apt-get update
+      apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+      systemctl enable --now docker
+      sshd -t
+      systemctl reload ssh
+      install -d -m 0700 -o ubuntu -g ubuntu /opt/costco-restock-checker
+      sudo -u ubuntu git clone https://github.com/robertwchen/costco_restock_checker.git /opt/costco-restock-checker
+      printf 'Server prepared. Monitor remains stopped pending verified configuration and state migration.\n'

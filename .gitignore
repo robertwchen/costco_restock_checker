@@ -16,6 +16,7 @@ env/
 monitor-state/
 monitor-plan.json
 .monitor.lock
+.deployment/
 
 # Database
 *.db

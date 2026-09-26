@@ -1,4 +1,4 @@
-# Paid fallback only. Disable the Actions monitor before starting this worker.
+# Persistent host, including Always Free. Disable Actions before starting this worker.
 services:
   monitor:
     build: .
@@ -9,6 +9,8 @@ services:
       HEADLESS: 'false'
       ENABLE_SCHEDULER: 'false'
       CHECK_INTERVAL_MINUTES: '10'
+      CHECKER_MAX_ATTEMPTS: '2'
+      CHECKER_RETRY_DELAY_SECONDS: '10'
     volumes:
       - costco-data:/app/data
     restart: unless-stopped
