@@ -150,7 +150,8 @@ http://localhost:8000.
 
 The plush monitor runs on standard GitHub-hosted Linux runners, independently of
 any laptop, editor, local terminal, or self-hosted runner. The cron is
-`7,17,27,37,47,57 * * * *`. Scheduling is best effort. Every other morning, the
+`7,17,27,37,47,57 * * * *`, plus an 08:30 America/New_York summary trigger.
+Scheduling is best effort. Every other morning, the
 first run at or after 08:30 America/New_York (before noon) summarizes all four
 animals to the primary channels. The secondary SMS recipient receives only a
 summary every 14 days. These intervals are anchored to explicit initialization

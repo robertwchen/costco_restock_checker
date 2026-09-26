@@ -10,6 +10,8 @@ on:
         default: monitor
   schedule:
     - cron: '7,17,27,37,47,57 * * * *'
+    - cron: '30 8 * * *'
+      timezone: America/New_York
 
 permissions:
   contents: read

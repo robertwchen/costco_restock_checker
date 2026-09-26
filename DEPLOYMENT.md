@@ -15,6 +15,9 @@ schedules disable after 60 days without repository activity. No keepalive
 commits are generated. Inspect actual **schedule** events on the workflow page.
 Re-enable using `gh workflow enable monitor.yml`; expired state still requires
 recovery. Dispatch new runs instead of rerunning old jobs, which is rejected.
+An additional `30 8 * * *` trigger uses `timezone: America/New_York` for the
+morning summary. Both triggers share the same state and concurrency group;
+calendar eligibility prevents daily or duplicate summary sends.
 
 ## Exact variant and location
 
