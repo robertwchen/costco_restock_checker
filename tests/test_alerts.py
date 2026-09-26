@@ -178,3 +178,31 @@ def test_dispatch_without_channels_records_nothing(session):
         settings=Settings(_env_file=None),
     )
     assert logs == []
+
+
+def test_durable_textbelt_sender_distinguishes_acceptance_and_rejection(monkeypatch):
+    settings = Settings(_env_file=None, textbelt_api_key="mock", alert_sms_to="+15550001111")
+    message = AlertMessage("subject", "body", "sms")
+    for response, expected in [({"success": True}, "accepted"), ({"success": False}, "rejected"), ({}, "ambiguous")]:
+        monkeypatch.setattr(alerts, "_post_textbelt", lambda payload: response)
+        assert alerts.deliver(settings, "textbelt", "+15550001111", message, "event-key") == expected
+
+
+def test_durable_sender_timeout_is_ambiguous(monkeypatch):
+    def timeout(payload):
+        raise TimeoutError("private provider request must never be logged")
+    monkeypatch.setattr(alerts, "_post_textbelt", timeout)
+    assert alerts.deliver(Settings(_env_file=None), "textbelt", "+15550001111", AlertMessage("s", "b"), "event-key") == "ambiguous"
+
+
+def test_resend_uses_stable_idempotency_key(monkeypatch):
+    import io
+    requests = []
+    def fake_open(request, timeout):
+        requests.append(request)
+        assert timeout == 20
+        return io.BytesIO(b'{"id":"accepted-message"}')
+    monkeypatch.setattr(alerts.urllib.request, "urlopen", fake_open)
+    outcome = alerts.deliver(_enabled_settings(), "email", "to@example.com", AlertMessage("s", "b"), "stable-event-key")
+    assert outcome == "accepted"
+    assert requests[0].get_header("Idempotency-key") == "stable-event-key"

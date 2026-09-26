@@ -116,3 +116,56 @@ def test_seed_preserves_existing_watch(session):
     session.flush()
     assert seed_capybara(session).id == seed_capybara(session).id
     assert session.query(Product).count() == 2
+
+
+@pytest.mark.parametrize("failure", ["block", "timeout"])
+def test_browser_blocks_and_timeouts_are_unknown(monkeypatch, failure):
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    import playwright.async_api
+
+    from app.config import Settings
+    from app.plush import check_animals_async
+
+    page = MagicMock()
+    page.goto = AsyncMock()
+    if failure == "timeout":
+        page.goto.side_effect = TimeoutError()
+    else:
+        page.goto.return_value.status = 403
+    browser = MagicMock()
+    browser.new_page = AsyncMock(return_value=page)
+    browser.close = AsyncMock()
+    runtime = MagicMock()
+    runtime.chromium.launch = AsyncMock(return_value=browser)
+    manager = MagicMock()
+    manager.__aenter__ = AsyncMock(return_value=runtime)
+    manager.__aexit__ = AsyncMock(return_value=False)
+    monkeypatch.setattr(playwright.async_api, "async_playwright", lambda: manager)
+    outcomes = asyncio.run(
+        check_animals_async(Settings(_env_file=None, delivery_zip="00000"), ["Capybara"])
+    )
+    assert outcomes["Capybara"].status == "blocked_or_unknown"
+    browser.close.assert_awaited_once()
+    page.request.get.assert_not_called()
+
+
+def test_flight_script_is_decoded_without_execution():
+    from app.plush import flight_chunks
+
+    payload = (
+        "abc:"
+        + json.dumps(
+            {
+                "parentId": "4201016777",
+                "key": "Design",
+                "value": "Capybara",
+                "itemNumber": "2005333",
+            }
+        )
+        + "\n"
+    )
+    script = "self.__next_f.push(" + json.dumps([1, payload]) + ")"
+    assert variant_map(flight_chunks([script])) == {"Capybara": "2005333"}
+    assert flight_chunks(["self.__next_f.push(not_valid_json)"]) == []
