@@ -25,6 +25,13 @@ class Base(DeclarativeBase):
     pass
 
 
+class MonitorCheckpoint(Base):
+    __tablename__ = "monitor_checkpoints"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    state: Mapped[dict] = mapped_column(JSON)
+
+
 class Product(Base):
     __tablename__ = "products"
 

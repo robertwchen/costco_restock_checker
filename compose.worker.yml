@@ -1,0 +1,23 @@
+# Paid fallback only. Disable the Actions monitor before starting this worker.
+services:
+  monitor:
+    build: .
+    command: ["xvfb-run", "-a", "python", "-m", "app.worker"]
+    env_file: .env
+    environment:
+      DATABASE_URL: sqlite:////app/data/costco_restock.db
+      HEADLESS: 'false'
+      ENABLE_SCHEDULER: 'false'
+      CHECK_INTERVAL_MINUTES: '10'
+    volumes:
+      - costco-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import pathlib,time; p=pathlib.Path('/app/data/costco_restock.heartbeat'); assert p.exists() and time.time()-p.stat().st_mtime < 1200"]
+      interval: 60s
+      timeout: 5s
+      start_period: 180s
+      retries: 3
+
+volumes:
+  costco-data:

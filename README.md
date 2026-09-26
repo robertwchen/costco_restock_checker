@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/robertwchen/costco_restock_checker/actions/workflows/tests.yml/badge.svg)](https://github.com/robertwchen/costco_restock_checker/actions/workflows/tests.yml)
 
-A scheduled service that monitors a Costco product page and sends an email or
+A location-aware retail stock monitor that checks a Costco product page and sends an email or
 SMS alert when a tracked item and variant becomes available for delivery to a
 configured ZIP code.
 
@@ -10,21 +10,33 @@ It is built as a small, self-contained example of a scrape-and-alert service:
 a FastAPI app, a Playwright-driven page checker, a SQLite store, a background
 scheduler, and a minimal dashboard. The default tracked product is a Novaform
 mattress (item 1847132, Full / Firm), and any other product URL can be added
-from the dashboard.
+from the dashboard. The cloud monitor watches **Jumbo Baby Animal Plush,
+Design: Capybara (item 2005333)** every ten minutes. Its dashboard is optional
+and local; authoritative cloud checks appear in
+[Actions](https://github.com/robertwchen/costco_restock_checker/actions/workflows/monitor.yml).
 
 ![Dashboard](docs/dashboard.png)
 
 ## Features
 
-- Scheduled availability checks at a configurable interval (default 30 minutes).
+- Scheduled availability checks at a configurable interval (default 10 minutes).
 - Real-browser checking with best-effort delivery ZIP and variant selection.
 - Three honest states: in stock, out of stock, and blocked or unknown.
-- Restock alerts over email (Resend) and SMS (Twilio), each optional.
+- Restock alerts over email (Resend) and SMS (Twilio or TextBelt), each optional.
+- Exact plush SKU checks, durable notification checkpoints, and stock summaries.
 - Minimal dashboard to add, view, check, pause, and remove products.
 - Stored check and alert history per product.
 - Docker image, unit tests, and a GitHub Actions workflow.
 
 ## How it works
+
+The cloud plush checker verifies the product's current `Design` mapping before
+querying the existing inventory endpoint with the exact item and private delivery
+ZIP. It requires matching SKU, request location, fresh response metadata, and
+consistent explicit inventory flags. Other animals and generic page availability
+cannot trigger a Capybara alert. See [deployment and recovery](DEPLOYMENT.md).
+
+The original dashboard/mattress flow remains available:
 
 1. The scheduler runs every `CHECK_INTERVAL_MINUTES` and checks each active product.
 2. For a product with an item number, Chromium loads the page to establish a
@@ -84,8 +96,8 @@ All settings are read from the environment (or a `.env` file).
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `DELIVERY_ZIP` | `98101` | ZIP used when checking availability. |
-| `CHECK_INTERVAL_MINUTES` | `30` | Minutes between scheduled checks. |
+| `DELIVERY_ZIP` | required | Private ZIP used when checking availability. |
+| `CHECK_INTERVAL_MINUTES` | `10` | Minutes between scheduled checks. |
 | `HEADLESS` | `true` | Run the browser headless. |
 | `REQUEST_TIMEOUT_SECONDS` | `45` | Per-check navigation timeout. |
 | `DATABASE_URL` | `sqlite:///./costco_restock.db` | SQLAlchemy database URL. |
@@ -103,6 +115,8 @@ All settings are read from the environment (or a `.env` file).
 | `SMS_INCLUDE_URL` | `false` | Include the product link in SMS (some gateways block links). |
 | `CHECKER_MAX_ATTEMPTS` | `3` | Attempts per check before reporting blocked/unknown. |
 | `CHECKER_RETRY_DELAY_SECONDS` | `6` | Delay between attempts. |
+| `SUMMARY_SMS_TO` | empty | Optional secondary recipient, summary every 14 days only. |
+| `MONITOR_STATE_KEY` | required for cloud/worker | Stable random secret, at least 32 characters, for opaque state identities. |
 
 Each channel activates only when its values are present, and is skipped
 otherwise:
@@ -134,11 +148,16 @@ http://localhost:8000.
 
 ## Deployment
 
-Alerts only fire while the app is running, so it needs a host that stays on. See
-[DEPLOYMENT.md](DEPLOYMENT.md) for running on a home computer (recommended),
-Docker on a server, or a cloud VM. Note that Costco's bot mitigation is more
-aggressive toward data-center IPs, so a residential connection is the most
-reliable place to run it.
+The plush monitor runs on standard GitHub-hosted Linux runners, independently of
+any laptop, editor, local terminal, or self-hosted runner. The cron is
+`7,17,27,37,47,57 * * * *`. Scheduling is best effort. Every other morning, the
+first run at or after 08:30 America/New_York (before noon) summarizes all four
+animals to the primary channels. The secondary SMS recipient receives only a
+summary every 14 days. These intervals are anchored to explicit initialization
+and follow Eastern daylight saving changes.
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for state artifacts, provider configuration,
+schedule health, recovery, and the inactive persistent-worker fallback.
 
 ## Testing
 

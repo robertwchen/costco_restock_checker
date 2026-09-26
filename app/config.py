@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     app_name: str = "Costco Restock Checker"
 
     # Checking behaviour
-    delivery_zip: str = "98101"
+    delivery_zip: str = ""
     check_interval_minutes: int = 10
     headless: bool = True
     request_timeout_seconds: int = 45

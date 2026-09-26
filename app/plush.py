@@ -50,22 +50,39 @@ def flight_chunks(scripts: list[str]) -> list[str]:
         for part in script.split("self.__next_f.push(")[1:]:
             try:
                 entry, _ = json.JSONDecoder().raw_decode(part)
-                if isinstance(entry, list) and len(entry) == 2 and entry[0] == 1 and isinstance(entry[1], str):
+                if (
+                    isinstance(entry, list)
+                    and len(entry) == 2
+                    and entry[0] == 1
+                    and isinstance(entry[1], str)
+                ):
                     chunks.append(entry[1])
             except ValueError:
                 continue
     return chunks
 
 
-def inventory_outcome(data, *, animal, mapped_sku, requested_url, response_url,
-                      zip_code, date_header, age_header="0", now=None) -> CheckOutcome:
+def inventory_outcome(
+    data,
+    *,
+    animal,
+    mapped_sku,
+    requested_url,
+    response_url,
+    zip_code,
+    date_header,
+    age_header="0",
+    now=None,
+) -> CheckOutcome:
     def unknown(reason):
         return CheckOutcome(Availability.BLOCKED_OR_UNKNOWN, reason)
+
     sku = ANIMALS.get(animal)
     if not sku or mapped_sku != sku:
         return unknown("Variant identity missing or conflicting")
-    expected = f"{INVENTORY_API}/{sku}?" + urlencode({
-        "destinationPostalCode": zip_code, "destinationCountryCode": "US"})
+    expected = f"{INVENTORY_API}/{sku}?" + urlencode(
+        {"destinationPostalCode": zip_code, "destinationCountryCode": "US"}
+    )
     if not zip_code or requested_url != expected or response_url != expected:
         return unknown("Delivery request context missing or mismatched")
     try:
@@ -80,26 +97,42 @@ def inventory_outcome(data, *, animal, mapped_sku, requested_url, response_url,
         data = data[0]
     if not isinstance(data, dict) or data.get("itemNumber") != sku:
         return unknown("Inventory SKU missing or mismatched")
-    for key, expected_value in (("destinationPostalCode", zip_code), ("destinationCountryCode", "US")):
+    for key, expected_value in (
+        ("destinationPostalCode", zip_code),
+        ("destinationCountryCode", "US"),
+    ):
         if key in data and data[key] != expected_value:
             return unknown("Inventory location mismatch")
     flag, state = data.get("availableForSale"), data.get("availability")
+    if data.get("status", "200 OK") != "200 OK" or (
+        flag is True and data.get("fulfilledBy") == "OutOfStock"
+    ):
+        return unknown("Conflicting fulfillment evidence")
     if flag is True and state == "INSTOCK":
         status = Availability.IN_STOCK
     elif flag is False and state == "NOSTOCK":
         status = Availability.OUT_OF_STOCK
     else:
         return unknown("Missing, malformed or conflicting inventory signals")
-    return CheckOutcome(status, f"{animal}; SKU {sku}; US standard delivery; configured ZIP matched; {state}")
+    return CheckOutcome(
+        status, f"{animal}; SKU {sku}; US standard delivery; configured ZIP matched; {state}"
+    )
 
 
 async def check_animals_async(settings: Settings, animals: list[str]) -> dict[str, CheckOutcome]:
     from playwright.async_api import async_playwright
 
-    results = {a: CheckOutcome(Availability.BLOCKED_OR_UNKNOWN, "Page/session unavailable") for a in animals}
+    results = {
+        a: CheckOutcome(Availability.BLOCKED_OR_UNKNOWN, "Page/session unavailable")
+        for a in animals
+    }
     if not settings.delivery_zip:
-        return {a: CheckOutcome(Availability.BLOCKED_OR_UNKNOWN, "Delivery ZIP not configured") for a in animals}
+        return {
+            a: CheckOutcome(Availability.BLOCKED_OR_UNKNOWN, "Delivery ZIP not configured")
+            for a in animals
+        }
     captured = {}
+
     def capture(request):
         if request.url.startswith(INVENTORY_API + "/"):
             captured["client"] = request.headers.get("client-identifier")
@@ -110,12 +143,20 @@ async def check_animals_async(settings: Settings, animals: list[str]) -> dict[st
             try:
                 page = await browser.new_page()
                 page.on("request", capture)
-                response = await page.goto(URL, wait_until="domcontentloaded", timeout=settings.request_timeout_seconds * 1000)
-                if not response or response.status != 200 or "access denied" in (await page.title()).lower():
+                response = await page.goto(
+                    URL,
+                    wait_until="domcontentloaded",
+                    timeout=settings.request_timeout_seconds * 1000,
+                )
+                if (
+                    not response
+                    or response.status != 200
+                    or "access denied" in (await page.title()).lower()
+                ):
                     return results
                 mapping = {}
                 for _ in range(30):
-                    chunks = flight_chunks(await page.locator('script').all_text_contents())
+                    chunks = flight_chunks(await page.locator("script").all_text_contents())
                     mapping = variant_map(chunks)
                     if captured.get("client") and all(a in mapping for a in animals):
                         break
@@ -123,35 +164,73 @@ async def check_animals_async(settings: Settings, animals: list[str]) -> dict[st
                 if not captured.get("client"):
                     return results
                 prices = {}
-                for block in await page.locator('script[type="application/ld+json"]').all_text_contents():
+                for block in await page.locator(
+                    'script[type="application/ld+json"]'
+                ).all_text_contents():
                     try:
                         for obj in walk(json.loads(block)):
                             offer = obj.get("offers")
                             if isinstance(offer, dict) and offer.get("priceCurrency") == "USD":
                                 value = offer.get("price")
-                                if isinstance(value, (str, int, float)) and str(value).replace('.', '', 1).isdigit():
+                                if (
+                                    isinstance(value, (str, int, float))
+                                    and str(value).replace(".", "", 1).isdigit()
+                                ):
                                     prices[obj.get("sku")] = f"USD {value}"
                     except ValueError:
                         pass
                 for animal in animals:
                     sku = ANIMALS[animal]
                     if mapping.get(animal) != sku:
-                        results[animal] = CheckOutcome(Availability.BLOCKED_OR_UNKNOWN, "Variant mapping not verified on current product page")
+                        results[animal] = CheckOutcome(
+                            Availability.BLOCKED_OR_UNKNOWN,
+                            "Variant mapping not verified on current product page",
+                        )
                         continue
-                    url = f"{INVENTORY_API}/{sku}?" + urlencode({"destinationPostalCode": settings.delivery_zip, "destinationCountryCode": "US"})
+                    url = f"{INVENTORY_API}/{sku}?" + urlencode(
+                        {
+                            "destinationPostalCode": settings.delivery_zip,
+                            "destinationCountryCode": "US",
+                        }
+                    )
                     try:
-                        r = await page.request.get(url, headers={**_inventory_headers(captured["client"]), "Cache-Control": "no-cache"}, timeout=15000)
+                        r = await page.request.get(
+                            url,
+                            headers={
+                                **_inventory_headers(captured["client"]),
+                                "Cache-Control": "no-cache",
+                            },
+                            timeout=15000,
+                        )
                         if r.status != 200:
-                            results[animal] = CheckOutcome(Availability.BLOCKED_OR_UNKNOWN, f"Inventory HTTP {r.status}")
+                            results[animal] = CheckOutcome(
+                                Availability.BLOCKED_OR_UNKNOWN, f"Inventory HTTP {r.status}"
+                            )
                             continue
-                        results[animal] = inventory_outcome(await r.json(), animal=animal, mapped_sku=mapping[animal], requested_url=url, response_url=r.url, zip_code=settings.delivery_zip, date_header=r.headers.get("date"), age_header=r.headers.get("age", "0"))
+                        results[animal] = inventory_outcome(
+                            await r.json(),
+                            animal=animal,
+                            mapped_sku=mapping[animal],
+                            requested_url=url,
+                            response_url=r.url,
+                            zip_code=settings.delivery_zip,
+                            date_header=r.headers.get("date"),
+                            age_header=r.headers.get("age", "0"),
+                        )
                         results[animal] = replace(results[animal], price=prices.get(sku))
                     except Exception:
-                        results[animal] = CheckOutcome(Availability.BLOCKED_OR_UNKNOWN, "Inventory request failed or timed out")
+                        results[animal] = CheckOutcome(
+                            Availability.BLOCKED_OR_UNKNOWN, "Inventory request failed or timed out"
+                        )
             finally:
                 await browser.close()
     except Exception as exc:
-        results = {a: CheckOutcome(Availability.BLOCKED_OR_UNKNOWN, f"Browser check failed: {type(exc).__name__}") for a in animals}
+        results = {
+            a: CheckOutcome(
+                Availability.BLOCKED_OR_UNKNOWN, f"Browser check failed: {type(exc).__name__}"
+            )
+            for a in animals
+        }
     return results
 
 
@@ -166,5 +245,6 @@ def check_animals(settings: Settings, animals=None):
             break
         if attempt + 1 < min(3, settings.checker_max_attempts):
             import time
+
             time.sleep(min(30, settings.checker_retry_delay_seconds * (attempt + 1)))
     return results
