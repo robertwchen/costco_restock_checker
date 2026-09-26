@@ -1,0 +1,37 @@
+# Inactive fallback proposal. Requires approval before creating paid resources.
+# Migrate the existing checkpoint and secrets before starting this worker.
+services:
+  - type: worker
+    name: costco-plush-monitor
+    runtime: docker
+    plan: 1c-2g
+    region: virginia
+    numInstances: 1
+    dockerfilePath: ./Dockerfile
+    dockerCommand: xvfb-run -a python -m app.worker
+    autoDeployTrigger: 'off'
+    disk:
+      name: monitor-state
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:////app/data/costco_restock.db
+      - key: HEADLESS
+        value: 'false'
+      - key: ENABLE_SCHEDULER
+        value: 'false'
+      - key: CHECK_INTERVAL_MINUTES
+        value: '10'
+      - key: SMS_INCLUDE_URL
+        value: 'false'
+      - key: DELIVERY_ZIP
+        sync: false
+      - key: MONITOR_STATE_KEY
+        sync: false
+      - key: TEXTBELT_API_KEY
+        sync: false
+      - key: ALERT_SMS_TO
+        sync: false
+      - key: SUMMARY_SMS_TO
+        sync: false

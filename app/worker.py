@@ -48,6 +48,7 @@ def main():
             print("Persistent watch initialized; start worker without --initialize")
             return
         while True:
+            started = time.monotonic()
             with session_scope() as session:
                 checkpoint = session.get(MonitorCheckpoint, identity)
                 state = validate(json.loads(json.dumps(checkpoint.state)), identity)
@@ -87,7 +88,7 @@ def main():
                         )
                     report(results, jobs, state)
                 path.with_suffix(".heartbeat").touch()
-            time.sleep(settings.check_interval_minutes * 60)
+            time.sleep(max(1, started + settings.check_interval_minutes * 60 - time.monotonic()))
 
 
 if __name__ == "__main__":

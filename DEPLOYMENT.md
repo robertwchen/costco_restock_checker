@@ -1,5 +1,12 @@
 # Cloud Deployment
 
+See [observed deployment evidence](docs/verification.md). Two scheduled cloud
+checks succeeded, but their nearly three-hour spacing did not meet the requested
+ten-minute cadence. Actions remains enabled while a persistent-host decision is
+pending. `render.yaml` is a concrete inactive proposal: one Virginia worker,
+1 CPU, 2 GB RAM, 1 GB disk, approximately $25.25/month before provider messaging
+charges/tax. It must not be created without explicit paid-resource approval.
+
 ## Active monitor
 
 [Plush stock monitor](https://github.com/robertwchen/costco_restock_checker/actions/workflows/monitor.yml)
@@ -165,8 +172,8 @@ rotation, cart operations, or orders are used.
 ## Inactive persistent fallback
 
 `compose.worker.yml` provides one worker under Xvfb, persistent SQLite, automatic
-restart, and a heartbeat health check. It checks on startup, then sleeps ten
-minutes after completion. A disk lock excludes another worker on the same disk.
+restart, and a heartbeat health check. It checks on startup, then on a ten-minute
+start-to-start interval without overlapping checks. A disk lock excludes another worker on the same disk.
 No dashboard port is published. Its new checkpoint table and Capybara seed do
 not delete the mattress or history; the watch's active flag is respected.
 
