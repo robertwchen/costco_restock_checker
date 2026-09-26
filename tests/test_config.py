@@ -3,7 +3,7 @@ from app.config import Settings
 
 def test_defaults_and_disabled_channels():
     settings = Settings(_env_file=None)
-    assert settings.check_interval_minutes == 30
+    assert settings.check_interval_minutes == 10
     assert settings.email_enabled is False
     assert settings.sms_enabled is False
 

@@ -31,7 +31,8 @@ import json
 import logging
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import StrEnum
 from urllib.parse import urlparse
 
@@ -58,6 +59,8 @@ class Availability(StrEnum):
 class CheckOutcome:
     availability: Availability
     detail: str
+    price: str | None = None
+    checked_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     @property
     def status(self) -> str:
@@ -538,6 +541,12 @@ def run_check(
         )
 
     settings = settings or get_settings()
+    if urlparse(url).path.rstrip('/').endswith('/4201016777'):
+        from .plush import ANIMALS, check_animals
+        animal = (variant or {}).get("Design")
+        if animal not in ANIMALS or item_number != ANIMALS[animal]:
+            return CheckOutcome(Availability.BLOCKED_OR_UNKNOWN, "Exact plush variant required")
+        return check_animals(settings.model_copy(update={"delivery_zip": zip_code or settings.delivery_zip}), [animal])[animal]
     attempts = max(1, settings.checker_max_attempts)
     outcome = CheckOutcome(Availability.BLOCKED_OR_UNKNOWN, "No attempt made")
     for attempt in range(1, attempts + 1):

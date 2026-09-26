@@ -12,6 +12,18 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .models import Product
+from .plush import ANIMALS, URL
+
+
+def seed_capybara(session: Session) -> Product:
+    product = session.scalar(select(Product).where(Product.url == URL, Product.item_number == ANIMALS["Capybara"]))
+    if product is None:
+        product = Product(name="Jumbo Baby Animal Plush - Capybara", url=URL,
+                          item_number=ANIMALS["Capybara"], variant={"Design": "Capybara"},
+                          zip_code=get_settings().delivery_zip)
+        session.add(product)
+        session.flush()
+    return product
 
 DEFAULT_PRODUCT: dict[str, object] = {
     "name": 'Novaform 14" Legacy Premier Support Hybrid Euro Top Mattress',

@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     # Checking behaviour
     delivery_zip: str = "98101"
-    check_interval_minutes: int = 30
+    check_interval_minutes: int = 10
     headless: bool = True
     request_timeout_seconds: int = 45
     # Retry a check that comes back blocked/unknown, to ride out transient blocks.
@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     # Include the product URL in SMS. Off by default because some gateways
     # (e.g. unverified TextBelt keys) block links. Enable once the key is verified.
     sms_include_url: bool = False
+    summary_sms_to: str | None = None
 
     @property
     def email_enabled(self) -> bool:

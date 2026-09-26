@@ -25,6 +25,10 @@ for _key in (
     "TWILIO_AUTH_TOKEN",
     "TWILIO_FROM_NUMBER",
     "ALERT_SMS_TO",
+    "TWILIO_API_KEY_SID",
+    "TWILIO_API_KEY_SECRET",
+    "TEXTBELT_API_KEY",
+    "SUMMARY_SMS_TO",
 ):
     os.environ[_key] = ""
 
