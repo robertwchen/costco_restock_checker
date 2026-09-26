@@ -13,6 +13,9 @@ env/
 
 # Environment and secrets
 .env
+monitor-state/
+monitor-plan.json
+.monitor.lock
 
 # Database
 *.db

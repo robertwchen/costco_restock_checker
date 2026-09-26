@@ -1,0 +1,81 @@
+name: Plush stock monitor
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "initialize only on first run; test uses isolated control state"
+        type: choice
+        options: [monitor, initialize, verify, test]
+        default: monitor
+  schedule:
+    - cron: '7,17,27,37,47,57 * * * *'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: plush-stock-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DELIVERY_ZIP: ${{ secrets.DELIVERY_ZIP }}
+      MONITOR_STATE_KEY: ${{ secrets.MONITOR_STATE_KEY }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+      ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+      TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+      TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+      TWILIO_API_KEY_SID: ${{ secrets.TWILIO_API_KEY_SID }}
+      TWILIO_API_KEY_SECRET: ${{ secrets.TWILIO_API_KEY_SECRET }}
+      TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+      TEXTBELT_API_KEY: ${{ secrets.TEXTBELT_API_KEY }}
+      ALERT_SMS_TO: ${{ secrets.ALERT_SMS_TO }}
+      SUMMARY_SMS_TO: ${{ secrets.SUMMARY_SMS_TO }}
+      SMS_INCLUDE_URL: 'false'
+      CHECK_INTERVAL_MINUTES: '10'
+      ENABLE_SCHEDULER: 'false'
+      HEADLESS: 'false'
+      CHECKER_MAX_ATTEMPTS: '2'
+      CHECKER_RETRY_DELAY_SECONDS: '10'
+      PYTHONUNBUFFERED: '1'
+      MODE: ${{ inputs.mode || 'monitor' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install browser dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+          sudo apt-get install -y xvfb
+      - name: Restore state and check inventory
+        id: prepare
+        run: xvfb-run -a python -m app.cloud prepare --mode "$MODE"
+      - name: Persist intent before notifications
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: monitor-intent
+          path: monitor-state/state.json
+          retention-days: 30
+          if-no-files-found: error
+      - name: Send notifications
+        run: python -m app.cloud send
+      - name: Persist outcomes including partial failures
+        if: ${{ always() && steps.prepare.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: monitor-final
+          path: monitor-state/state.json
+          retention-days: 30
+          if-no-files-found: error

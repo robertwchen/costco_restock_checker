@@ -84,7 +84,7 @@ def send_email(settings: Settings, message: AlertMessage) -> bool:
         )
         return True
     except Exception:
-        logger.exception("Failed to send email alert")
+        logger.error("Email request failed; acceptance unknown")
         return False
 
 
@@ -116,11 +116,11 @@ def send_sms(settings: Settings, message: AlertMessage) -> bool:
                     body=body, from_=settings.twilio_from_number, to=recipient
                 )
             except Exception:
-                logger.exception("Failed to send SMS to %s", recipient)
+                logger.error("SMS request failed; acceptance unknown")
                 all_sent = False
         return all_sent
     except Exception:
-        logger.exception("Failed to initialize Twilio client")
+        logger.error("Could not initialize SMS provider")
         return False
 
 
@@ -147,12 +147,10 @@ def send_textbelt(settings: Settings, message: AlertMessage) -> bool:
                 {"phone": recipient, "message": body, "key": settings.textbelt_api_key or ""}
             )
             if not result.get("success"):
-                logger.error(
-                    "TextBelt failed for %s: %s", recipient, result.get("error")
-                )
+                logger.error("TextBelt rejected SMS")
                 all_sent = False
         except Exception:
-            logger.exception("TextBelt request failed for %s", recipient)
+            logger.error("TextBelt request failed; acceptance unknown")
             all_sent = False
     return all_sent
 
@@ -198,7 +196,7 @@ def dispatch_restock_alerts(
             )
         )
 
-    if settings.textbelt_enabled:
+    if settings.textbelt_enabled and not settings.sms_enabled:
         success = send_textbelt(settings, message)
         logs.append(
             AlertLog(
@@ -217,3 +215,35 @@ def dispatch_restock_alerts(
         session.add(log)
     session.flush()
     return logs
+
+
+def deliver(settings: Settings, channel: str, recipient: str, message: AlertMessage,
+            idempotency_key: str) -> str:
+    """One bounded attempt. Acceptance is not delivery; timeouts are ambiguous."""
+    try:
+        if channel == "email":
+            payload = json.dumps({"from": settings.alert_email_from, "to": [recipient],
+                                  "subject": message.subject, "text": message.body}).encode()
+            request = urllib.request.Request("https://api.resend.com/emails", data=payload,
+                headers={"Authorization": f"Bearer {settings.resend_api_key}",
+                         "Content-Type": "application/json", "Idempotency-Key": idempotency_key})
+            with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310
+                result = json.load(response)
+            return "accepted" if result.get("id") else "ambiguous"
+        if channel == "textbelt":
+            result = _post_textbelt({"phone": recipient, "message": message.sms_text or message.body,
+                                    "key": settings.textbelt_api_key or ""})
+            if result.get("success") is True:
+                return "accepted"
+            return "rejected" if result.get("success") is False else "ambiguous"
+        if channel == "sms":
+            from twilio.http.http_client import TwilioHttpClient
+            client = _twilio_client(settings)
+            client.http_client = TwilioHttpClient(timeout=20, max_retries=0)
+            result = client.messages.create(body=message.sms_text or message.body,
+                                            from_=settings.twilio_from_number, to=recipient)
+            return "accepted" if result.sid else "ambiguous"
+    except Exception:
+        # A timeout can happen after acceptance. Never automatically retry it.
+        return "ambiguous"
+    return "rejected"
