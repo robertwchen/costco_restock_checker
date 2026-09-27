@@ -34,4 +34,8 @@ jobs:
       - name: Build native ARM64 worker
         run: docker build --tag costco-worker:smoke .
       - name: Check headed Chromium and worker entry point without network or secrets
-        run: docker run --rm -i --network none --entrypoint xvfb-run costco-worker:smoke -a python - < tests/container_smoke.py
+        timeout-minutes: 3
+        run: |
+          timeout --kill-after=10s 120s docker run --rm --init --network none --shm-size=256m \
+            --mount type=bind,source="$PWD/tests/container_smoke.py",target=/tmp/container_smoke.py,readonly \
+            --entrypoint xvfb-run costco-worker:smoke -a python /tmp/container_smoke.py
