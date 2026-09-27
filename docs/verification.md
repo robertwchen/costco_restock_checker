@@ -1,6 +1,35 @@
-# Deployment Verification - September 26, 2026
+# Deployment Verification
 
-## Live hosted results
+## Oracle preparation - September 27, 2026
+
+Oracle Always Free is the selected replacement, but account sign-in remains
+pending. No Oracle instance or paid resource has been created. Actions remains
+the sole production monitor; its observed cadence is still inadequate.
+
+On commit `54d849b`, [hosted lint and 128 offline tests](https://github.com/robertwchen/costco_restock_checker/actions/runs/36327455227)
+passed. [Native ARM64 container verification](https://github.com/robertwchen/costco_restock_checker/actions/runs/36327455077)
+also passed: the Docker image built, headed Chromium rendered local HTML under
+Xvfb with networking disabled, and the worker CLI loaded. The first container
+test timed out; the passing version mounts its test file instead of using stdin
+and enforces a two-minute timeout. This verifies image compatibility, not Costco
+access from Oracle. The local image build was blocked by a disk I/O error on the
+nearly full laptop; no user data was deleted.
+
+New regression tests cover checkpoint import without resetting accepted sends
+or test budgets, refusal to overwrite existing state, corrupt/wrong-identity
+imports, no-send verification, isolated control tests across invocations, and
+exclusive worker locking. No real test notifications were sent.
+
+The latest inspected scheduled run,
+[36323813687](https://github.com/robertwchen/costco_restock_checker/actions/runs/36323813687),
+checked Capybara 2005333 at **2026-09-27 13:51:45.892760 UTC** for the configured
+private ZIP and US standard delivery. It returned explicit **NOSTOCK** and
+reserved zero notifications. Oracle access, state transfer, restart persistence,
+two automatic worker intervals, and live positive-path sends remain unverified.
+
+See [Oracle deployment](oracle.md) for the prepared bootstrap and handoff.
+
+## Live hosted results - September 26, 2026
 
 All observations used the existing configured delivery ZIP (kept private), US
 standard-delivery context, fresh inventory responses, and live product mapping.
