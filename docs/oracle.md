@@ -1,6 +1,7 @@
 # Oracle Always Free Worker
 
-Deployment status: **prepared, not deployed**. Oracle account sign-in is pending.
+Deployment status: **prepared, not deployed**. Account sign-in and the Ashburn
+home region are verified; instance creation and SSH access approval are pending.
 The existing Actions monitor remains the only enabled production monitor until
 the replacement passes its live access check. Do not claim a ten-minute service
 is active based on this setup document alone.
@@ -83,6 +84,35 @@ Sources: [Docker Ubuntu installation](https://docs.docker.com/engine/install/ubu
    recording actual UTC timestamps. Restart once and verify state survives
    without duplicate alerts. Confirm Actions remains disabled and no local
    scheduler or other cloud monitor owns this watch.
+
+### Manual deployment workflow
+
+`oracle-handoff.yml` is dispatch-only, shares the monitor's concurrency group,
+and never starts the worker or sends notifications. Configure these additional
+repository secrets only after the VM and its administrative access are approved:
+`ORACLE_SSH_HOST` (IPv4), `ORACLE_SSH_PRIVATE_KEY` (dedicated deployment key), and
+`ORACLE_SSH_KNOWN_HOSTS` (host key verified against Oracle's console). Transfer
+secret files with `gh secret set NAME < protected-file`; never put values in
+shell arguments, chat, or workflow inputs. The job reports its public source
+address using Amazon's check-IP service and waits up to ten minutes for TCP/22.
+Temporarily permit that runner's SSH source only, then remove that rule after
+each job (a separate dispatch may use a different address). Do not open
+SSH globally to accommodate changing runner addresses.
+
+Dispatch `verify` first. It checks out the workflow's immutable commit on the
+server, installs a mode-0600 environment file, builds the image, and runs the
+no-send Oracle access check. Existing differing configuration is rejected, not
+overwritten. Review the result before disabling `monitor.yml`. Then dispatch
+`import` at the same commit. It requires the monitor to be manually disabled
+with no unfinished runs, restores its latest checkpoint, and imports that exact
+state over strict host-key-checked SSH. It does not initialize a new baseline.
+An existing checkpoint makes a repeat import fail closed. Configuration and
+keys are never uploaded as artifacts; remote errors are intentionally redacted.
+
+After successful import, remove the temporary deployment key secret from GitHub
+and retain operator access privately. Start the worker only after the bounded
+test and deduplication checks below. A failure between disabling Actions and
+starting Oracle is an explicit monitoring gap, not an automatic fallback.
 
 Commands on the server, after protected configuration is in place:
 
